@@ -78,7 +78,7 @@ const useApi = () => {
           Alert.alert("", "Login Successfully");
           console.log(res.data.token);
           await AsyncStorage.setItem("token", res.data.token);
-          router.navigate("/(tabs)/sermon");
+          router.replace("/(tabs)/sermon");
         }
       } catch (error) {
         const errorMessage = error.response
@@ -156,6 +156,14 @@ const useApi = () => {
     } catch (error) {
       console.log(error.response);
       setError(true);
+      if (error.response.data.message === "Invalid token") {
+        await AsyncStorage.removeItem("token");
+        router.replace("/auth/login"); // Ensure router is passed as a parameter
+        return; // Stop further execution
+      }
+      // router.replace("/auth/login"); // Ensure router is passed as a parameter
+      // Handle network error or other issues
+      // console.error("Network error:", error.message);
       Alert.alert("Network Error", "Check your network connection");
     } finally {
       setLoading(false);

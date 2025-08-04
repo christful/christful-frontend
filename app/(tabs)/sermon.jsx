@@ -4,15 +4,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TouchableHighlight,
   Modal,
-  TextInput,
-  Dimensions,
   FlatList,
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Posts from "@/components/Posts";
 import { FontAwesome5, FontAwesome6, MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,34 +19,89 @@ import { Colors } from "@/constants/Colors";
 import Animated, {
   useSharedValue,
   withTiming,
-  withReanimatedTimer,
+  useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
+
+// Sample inspirational content
+const DAILY_INSPIRATIONS = [
+  {
+    id: 1,
+    title: "Verse of the Day",
+    content: "For I know the plans I have for you, declares the Lord, plans to prosper you and not to harm you, plans to give you hope and a future.",
+    reference: "Jeremiah 29:11"
+  },
+  {
+    id: 2,
+    title: "Word of Encouragement",
+    content: "Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God.",
+    reference: "Philippians 4:6"
+  },
+  {
+    id: 3,
+    title: "Daily Wisdom",
+    content: "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.",
+    reference: "Proverbs 3:5-6"
+  }
+];
 
 export default function Page() {
   const { getAllPosts } = useApi();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(true);
+  const [error, setError] = useState(false);
   const [response, setResponse] = useState([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const height = useSharedValue(50);
+  const [currentInspiration, setCurrentInspiration] = useState(DAILY_INSPIRATIONS[0]);
+
+  // Animation values
+  const menuHeight = useSharedValue(50);
+  const menuOpacity = useSharedValue(0);
+  const iconRotation = useSharedValue(0);
+  const buttonScale = useSharedValue(1);
+
+  // Timer for inspiration rotation
+  const inspirationTimer = useRef(null);
+
   useEffect(() => {
     handleFetch();
+
+    // Rotate inspirations every 10 seconds
+    inspirationTimer.current = setInterval(() => {
+      setCurrentInspiration(prev => {
+        const currentIndex = DAILY_INSPIRATIONS.findIndex(i => i.id === prev.id);
+        const nextIndex = (currentIndex + 1) % DAILY_INSPIRATIONS.length;
+        return DAILY_INSPIRATIONS[nextIndex];
+      });
+    }, 10000);
+
+    return () => {
+      if (inspirationTimer.current) {
+        clearInterval(inspirationTimer.current);
+      }
+    };
   }, []);
 
   const handleFetch = async () => {
     const result = await getAllPosts(setLoading, setError);
     setResponse(result);
-    console.log("result", result);
   };
 
-  const handleGrow = () => {
+  const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+
     if (!isMenuOpen) {
-      height.value = withTiming(height.value + 135);
+      // Open menu
+      menuHeight.value = withSpring(200, { damping: 15 });
+      menuOpacity.value = withTiming(1, { duration: 300 });
+      iconRotation.value = withSpring(45, { damping: 15 });
+      buttonScale.value = withSpring(1.1, { damping: 15 });
     } else {
-      height.value = withTiming(height.value - 135);
+      // Close menu
+      menuHeight.value = withSpring(50, { damping: 15 });
+      menuOpacity.value = withTiming(0, { duration: 200 });
+      iconRotation.value = withSpring(0, { damping: 15 });
+      buttonScale.value = withSpring(1, { damping: 15 });
     }
   };
 
@@ -60,6 +112,27 @@ export default function Page() {
       setRefreshing(false);
     }, 2000);
   }, []);
+
+  // Animated styles
+  const menuContainerStyle = useAnimatedStyle(() => {
+    return {
+      height: menuHeight.value,
+      opacity: menuOpacity.value,
+    };
+  });
+
+  const buttonStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: buttonScale.value }],
+    };
+  });
+
+  const iconStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${iconRotation.value}deg` }],
+    };
+  });
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -67,178 +140,191 @@ export default function Page() {
       </View>
     );
   }
-  // if (error) {
-  //   return (
-  //     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-  //       <MaterialIcons name="signal-wifi-connected-no-internet-4" size={100} />
-  //       <TouchableOpacity style={styles.errorButton} onPress={handleFetch}>
-  //         <Text style={styles.errorButtonText}>Refresh</Text>
-  //       </TouchableOpacity>
-  //     </View>
-  //   );
-  // }
 
   return (
     <View style={styles.container}>
-      <View
-        style={{
-          position: "absolute",
-          bottom: 50,
-          right: 20,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Animated.View style={[styles.overlayContainer, { height }]}>
+      {/* Floating Action Button Menu */}
+      <View style={styles.fabContainer}>
+        <Animated.View style={[styles.menuContainer, menuContainerStyle]}>
           <TouchableOpacity
-            style={styles.overlayOptions}
+            style={styles.menuItem}
             onPress={() => router.navigate("/overlayOptions/post")}
           >
             <FontAwesome6
               name="plus"
-              size={18}
+              size={20}
               color={Colors.light.icon}
-              style={styles.overlayIcons}
+              style={styles.menuIcon}
             />
+            <Text style={styles.menuText}>Create Post</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.overlayOptions}>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.navigate("/audio")}
+          >
             <FontAwesome5
               name="microphone"
-              size={18}
+              size={20}
               color={Colors.light.icon}
-              style={styles.overlayIcons}
+              style={styles.menuIcon}
             />
+            <Text style={styles.menuText}>Record Audio</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.overlayOptions}>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.navigate("/bible")}
+          >
             <FontAwesome5
               name="book-open"
-              size={18}
+              size={20}
               color={Colors.light.icon}
-              style={styles.overlayIcons}
+              style={styles.menuIcon}
             />
+            <Text style={styles.menuText}>Read Bible</Text>
           </TouchableOpacity>
         </Animated.View>
-        <TouchableHighlight
-          underlayColor={"red"}
-          style={styles.overlayButton}
-          onPress={handleGrow}
-        >
-          <FontAwesome5 name="layer-group" size={20} color={"white"} />
-        </TouchableHighlight>
+
+        <Animated.View style={[styles.fabButton, buttonStyle]}>
+          <TouchableOpacity
+            style={styles.fabTouchable}
+            onPress={toggleMenu}
+            activeOpacity={0.8}
+          >
+            <Animated.View style={iconStyle}>
+              <FontAwesome5 name="plus" size={24} color={"white"} />
+            </Animated.View>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
-      {/* <Modal transparent={false} animationType="slide">
-        <View style={styles.postContainer}>
-          <View style={styles.inputContainer}>
-            <TextInput
-              placeholder="Share Your Opinion"
-              multiline
-              numberOfLines={100}
-              textAlignVertical="top"
-            />
-          </View>
-          <View style={styles.bottomContainer}>
-            <TouchableOpacity style={styles.uploadOptions}>
-              <FontAwesome5 name="image" color={Colors.light.icon} size={20} />
-              <Text style={styles.uploadOptionsText}>Photo</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.uploadOptions}>
-              <MaterialIcons
-                name="smart-display"
-                color={Colors.light.icon}
-                size={20}
-              />
-              <Text style={styles.uploadOptionsText}>Video</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.uploadOptions}>
-              <MaterialIcons
-                name="headset"
-                color={Colors.light.icon}
-                size={20}
-              />
-              <Text style={styles.uploadOptionsText}>Audio</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal> */}
+
+      {/* Content */}
       <FlatList
         data={response}
+        ListHeaderComponent={
+          <View style={styles.inspirationContainer}>
+            <View style={styles.inspirationHeader}>
+              <Text style={styles.inspirationTitle}>{currentInspiration.title}</Text>
+              <FontAwesome5 name="bible" size={20} color={Colors.light.tint} />
+            </View>
+            <Text style={styles.inspirationContent}>"{currentInspiration.content}"</Text>
+            <Text style={styles.inspirationReference}>{currentInspiration.reference}</Text>
+          </View>
+        }
         renderItem={({ item }) => <Posts data={item} />}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.light.tint]}
+            tintColor={Colors.light.tint}
+          />
         }
+        keyExtractor={(item) => item?.id}
+        contentContainerStyle={styles.listContent}
       />
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  overlayContainer: {
-    width: 50,
-    backgroundColor: "#f2f2f2",
-    borderRadius: 50,
-    flexDirection: "column",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    alignSelf: "center",
-    marginBottom: -50,
-    paddingTop: 20,
-    overflow: "hidden",
-    zIndex: 9,
-  },
-  overlayButton: {
-    width: 70,
-    height: 70,
-    elevation: 5,
-    borderRadius: 50,
-    zIndex: 99,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: Colors.light.button,
-  },
-  overlayOptions: {
-    width: "100%",
-    height: 40,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  overlayIcons: { textAlign: "center", marginBottom: 20 },
-
-  postContainer: {
-    backgroundColor: Colors.light.background,
-    flex: 1,
-  },
-  inputContainer: {
-    width: "100%",
-  },
-  bottomContainer: {
+  fabContainer: {
     position: "absolute",
-    bottom: 0,
-    borderTopWidth: 0.2,
-    backgroundColor: Colors.light.tint,
-    height: 300,
+    bottom: 30,
+    right: 20,
+    alignItems: "flex-end",
+    zIndex: 100,
   },
-  uploadOptions: {
-    width: Dimensions.get("window").width,
+  fabButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.light.button,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  fabTouchable: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuContainer: {
+    width: 200,
+    backgroundColor: "white",
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 10,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    overflow: "hidden",
+  },
+  menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 20,
+    paddingVertical: 12,
   },
-  uploadOptionsText: {
-    marginLeft: 20,
-  },
-  errorButton: {
-    width: 200,
-    padding: 10,
-    backgroundColor: Colors.light.button,
-    marginTop: 20,
-  },
-  errorButtonText: {
-    color: "white",
+  menuIcon: {
+    marginRight: 15,
+    width: 24,
     textAlign: "center",
+  },
+  menuText: {
+    fontSize: 16,
+    color: Colors.light.text,
+  },
+  inspirationContainer: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 15,
+    padding: 20,
+    margin: 15,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.light.tint,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  inspirationHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  inspirationTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: Colors.light.tint,
+  },
+  inspirationContent: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: "#444",
+    fontStyle: "italic",
+    marginBottom: 10,
+  },
+  inspirationReference: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "right",
+    fontFamily: "serif",
+  },
+  listContent: {
+    paddingBottom: 80,
   },
 });

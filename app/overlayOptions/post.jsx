@@ -10,230 +10,354 @@ import {
   Modal,
   ActivityIndicator,
   Image,
-  Video,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Colors } from "@/constants/Colors";
-import { FontAwesome5, FontAwesome6, MaterialIcons } from "@expo/vector-icons";
+import { FontAwesome5, FontAwesome6, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import useApi from "@/hooks/useApi";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { useVideoPlayer, VideoPlayer, VideoView } from "expo-video";
+import { VideoView } from "expo-video";
 
 export default function Page() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
   const [content, setContent] = useState("");
   const [media_url, setMedia_url] = useState("");
-  const [isImageSafe, setIsImageSafe] = useState(false);
-  const [isVideoSafe, setIsVideoSafe] = useState(false);
   const [image, setImage] = useState(null);
   const [video, setVideo] = useState(null);
-  const { createPost, mediaUpload, checkMediaForNSFW, getAllPosts, uriToBlob } =
-    useApi();
+  const [isUploading, setIsUploading] = useState(false);
+  const { createPost, mediaUpload, checkMediaForNSFW, uriToBlob } = useApi();
 
   const handlePost = async () => {
-    try {
-      // Upload media first
-      const uploadedMediaUrl = await mediaUpload(
-        media_url,
-        setMedia_url,
-        setLoading,
-        image
-      );
+    if (!content.trim() && !media_url) {
+      Alert.alert("Empty Post", "Please add text or media to create a post");
+      return;
+    }
 
-      // Only call createPost if the media upload was successful
-      if (uploadedMediaUrl) {
-        await createPost(content, uploadedMediaUrl, setMedia_url, setLoading);
-        await getAllPosts(setLoading, setError);
-        router.back();
-      } else {
-        Alert.alert("Error", "Media upload failed. Post was not created.");
+    try {
+      setIsUploading(true);
+      let uploadedMediaUrl = "";
+
+      // Upload media if selected
+      if (media_url) {
+        uploadedMediaUrl = await mediaUpload(
+          media_url,
+          setMedia_url,
+          setLoading,
+          image
+        );
       }
+
+      // Create post with or without media
+      await createPost(content, uploadedMediaUrl, setMedia_url, setLoading);
+      router.back();
     } catch (error) {
       console.error("Error in handlePost:", error);
       Alert.alert("Error", "An error occurred while creating the post.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const pickImage = async () => {
-    // No permissions request is necessary for launching the image library
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'][0],
       allowsEditing: true,
-      quality: 1,
+      quality: 0.8,
+      aspect: [4, 3],
     });
 
-    console.log(result);
-
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
+    if (!result.canceled && result.assets.length > 0) {
+      const uri = result.assets[0].uri;
+      setImage(uri);
       setVideo(null);
-      setMedia_url(result.assets[0].uri);
-    }
+      setMedia_url(uri);
 
-    await checkMediaForNSFW(result.assets[0].uri, setIsImageSafe, image);
+      // Check if image is safe (optional)
+      await checkMediaForNSFW(uri, setIsImageSafe => {
+        if (!setIsImageSafe) {
+          Alert.alert("Content Warning", "This image may contain sensitive content");
+        }
+      }, uri);
+    }
   };
+
   const pickVideo = async () => {
-    // No permissions request is necessary for launching the image library
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["videos"],
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       allowsEditing: true,
       quality: 1,
-      // base64: true,
     });
 
-    console.log(result);
-
-    if (!result.canceled) {
-      const blob = await uriToBlob(result.assets[0].uri);
-      console.log("blob", blob.data.__collector);
-      setVideo(result.assets[0].uri);
+    if (!result.canceled && result.assets.length > 0) {
+      const uri = result.assets[0].uri;
+      setVideo(uri);
       setImage(null);
-      setMedia_url(result.assets[0].uri);
+      setMedia_url(uri);
     }
-
-    // await checkMediaForNSFW(result.assets[0].uri, setIsVideoSafe, image);
   };
 
-  const player = useVideoPlayer(video, (player) => {
-    player.pause();
-  });
+  const removeMedia = () => {
+    setMedia_url("");
+    setImage(null);
+    setVideo(null);
+  };
+
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+    >
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <FontAwesome6 name="arrow-left" size={20} />
-          </TouchableOpacity>
-          <Text style={styles.postTitle}>Post</Text>
-        </View>
-        <TouchableOpacity style={styles.postButton} onPress={handlePost}>
-          <Text style={styles.postText}>Post</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <FontAwesome6 name="arrow-left" size={20} color={Colors.light.text} />
+        </TouchableOpacity>
+
+        <Text style={styles.title}>Create Post</Text>
+
+        <TouchableOpacity
+          style={[
+            styles.postButton,
+            (!content && !media_url) && styles.disabledButton
+          ]}
+          onPress={handlePost}
+          disabled={!content && !media_url}
+        >
+          {isUploading ? (
+            <ActivityIndicator color="white" size="small" />
+          ) : (
+            <Text style={styles.postButtonText}>Post</Text>
+          )}
         </TouchableOpacity>
       </View>
-      {loading && (
-        <Modal transparent>
-          <View
-            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-          >
-            <ActivityIndicator />
-          </View>
-        </Modal>
-      )}
-      <View style={styles.inputContainer}>
-        <TextInput
-          placeholder="Share Your Opinion"
-          multiline
-          numberOfLines={100}
-          textAlignVertical="top"
-          onChangeText={(text) => setContent(text)}
-        />
-      </View>
-      <View style={styles.bottomContainer}>
-        <View style={styles.mediaOverviewContainer}>
-          {isImageSafe && (
-            <Image source={{ uri: image }} style={styles.media} />
-          )}
 
-          {video && (
-            <VideoView
-              style={styles.media}
-              player={player}
-              allowsFullscreen
-              allowsPictureInPicture
-            />
-          )}
-        </View>
-        <View style={styles.bottomContainerUploadsOptions}>
-          <TouchableOpacity style={styles.uploadOptions} onPress={pickImage}>
-            <FontAwesome5 name="image" color={Colors.light.icon} size={20} />
-            <Text style={styles.uploadOptionsText}>Photo</Text>
+      {/* Content Area */}
+      <ScrollView
+        style={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TextInput
+          style={styles.input}
+          placeholder="Share your thoughts or testimony..."
+          placeholderTextColor="#888"
+          multiline
+          numberOfLines={6}
+          textAlignVertical="top"
+          onChangeText={setContent}
+          value={content}
+          autoFocus
+        />
+
+        {/* Media Preview */}
+        {(image || video) && (
+          <View style={styles.mediaPreviewContainer}>
+            {image ? (
+              <View style={styles.imagePreview}>
+                <Image source={{ uri: image }} style={styles.mediaPreview} />
+                <TouchableOpacity
+                  style={styles.removeMediaButton}
+                  onPress={removeMedia}
+                >
+                  <Ionicons name="close-circle" size={24} color={Colors.light.tint} />
+                </TouchableOpacity>
+              </View>
+            ) : video ? (
+              <View style={styles.videoPreview}>
+                <VideoView
+                  style={styles.mediaPreview}
+                  source={{ uri: video }}
+                  resizeMode="cover"
+                  paused={true}
+                />
+                <TouchableOpacity
+                  style={styles.removeMediaButton}
+                  onPress={removeMedia}
+                >
+                  <Ionicons name="close-circle" size={24} color={Colors.light.tint} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Media Options */}
+      <View style={styles.mediaOptionsContainer}>
+        <Text style={styles.sectionTitle}>Add Media</Text>
+        <View style={styles.mediaButtons}>
+          <TouchableOpacity
+            style={styles.mediaButton}
+            onPress={pickImage}
+          >
+            <FontAwesome5 name="image" size={24} color={Colors.light.tint} />
+            <Text style={styles.mediaButtonText}>Photo</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.uploadOptions} onPress={pickVideo}>
-            <MaterialIcons
-              name="smart-display"
-              color={Colors.light.icon}
-              size={20}
-            />
-            <Text style={styles.uploadOptionsText}>Video</Text>
+
+          <TouchableOpacity
+            style={styles.mediaButton}
+            onPress={pickVideo}
+          >
+            <MaterialIcons name="smart-display" size={24} color={Colors.light.tint} />
+            <Text style={styles.mediaButtonText}>Video</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.uploadOptions}>
-            <MaterialIcons name="headset" color={Colors.light.icon} size={20} />
-            <Text style={styles.uploadOptionsText}>Audio</Text>
+
+          <TouchableOpacity
+            style={styles.mediaButton}
+            onPress={() => Alert.alert("Coming Soon", "Audio recording feature will be available soon")}
+          >
+            <MaterialIcons name="headset" size={24} color={Colors.light.tint} />
+            <Text style={styles.mediaButtonText}>Audio</Text>
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+
+      {/* Loading Overlay */}
+      {isUploading && (
+        <View style={styles.overlay}>
+          <View style={styles.uploadingContainer}>
+            <ActivityIndicator size="large" color={Colors.light.tint} />
+            <Text style={styles.uploadingText}>Creating your post...</Text>
+          </View>
+        </View>
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
+const windowWidth = Dimensions.get("window").width;
+
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.light.background,
     flex: 1,
-  },
-  inputContainer: {
-    width: "100%",
-    margin: 10,
-  },
-  bottomContainer: {
-    position: "absolute",
-    bottom: 0,
-    borderTopWidth: 0.2,
-  },
-  bottomContainerUploadsOptions: {
-    backgroundColor: Colors.light.tint,
-  },
-  mediaOverviewContainer: {
-    padding: 20,
-    flexDirection: "row",
+    backgroundColor: Colors.light.background,
+    paddingTop: 20,
   },
   header: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    padding: 10,
-    borderBottomWidth: 3,
-    borderColor: "rgba(0, 0, 0, 0.1)",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    backgroundColor: "white",
+    elevation: 2,
   },
-  uploadOptions: {
-    width: Dimensions.get("window").width,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 20,
+  backButton: {
+    padding: 8,
   },
-  uploadOptionsText: {
-    marginLeft: 20,
+  title: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.light.text,
   },
   postButton: {
     backgroundColor: Colors.light.button,
-    padding: 12,
-    width: 100,
-    alignSelf: "center",
-    borderRadius: 30,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    minWidth: 80,
   },
-  postText: {
+  disabledButton: {
+    backgroundColor: "#cccccc",
+  },
+  postButtonText: {
     color: "white",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "600",
     textAlign: "center",
   },
-  postTitle: {
-    fontSize: 20,
-    fontWeight: "500",
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 20,
   },
-  headerLeft: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  input: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: Colors.light.text,
+    minHeight: 150,
+    paddingBottom: 20,
+  },
+  mediaPreviewContainer: {
+    marginTop: 20,
+    marginBottom: 30,
     alignItems: "center",
-    width: 100,
-    paddingLeft: 10,
   },
-  media: {
+  imagePreview: {
+    position: "relative",
+  },
+  videoPreview: {
+    position: "relative",
+  },
+  mediaPreview: {
+    width: windowWidth - 32,
+    height: 300,
+    borderRadius: 12,
+    backgroundColor: "#f0f0f0",
+  },
+  removeMediaButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    borderRadius: 15,
+    padding: 4,
+  },
+  mediaOptionsContainer: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#e0e0e0",
+    backgroundColor: "white",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.light.text,
+    marginBottom: 12,
+  },
+  mediaButtons: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  mediaButton: {
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 10,
     width: 100,
-    height: 100,
-    marginHorizontal: 10,
+  },
+  mediaButtonText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.light.text,
+  },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  uploadingContainer: {
+    backgroundColor: "white",
+    padding: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 5,
+  },
+  uploadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.light.text,
   },
 });

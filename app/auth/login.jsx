@@ -29,7 +29,7 @@ export default function Page() {
 
   const handleLogin = async () => {
     if (loading) return;
-    await login(email, password, setLoading);
+    await login(email.trim(), password, setLoading);
   };
   setStatusBarStyle("dark");
   return (
@@ -38,7 +38,7 @@ export default function Page() {
         contentContainerStyle={{ flexGrow: 1, width: "100%" }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ width: "100%", alignItems: "center" }}>
+        <View style={{ width: "100%", alignItems: "center", justifyContent: "center", marginTop: 50 }}>
           <Image
             style={styles.image}
             source={require("@/assets/images/logo.png")}
@@ -130,9 +130,10 @@ const styles = StyleSheet.create({
     paddingLeft: 20,
     width: "80%",
     height: 45,
+    display: "flex",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "center",
     backgroundColor: Colors.light.button,
     borderRadius: 10,
   },
@@ -141,7 +142,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "white",
     fontWeight: "800",
+
     marginHorizontal: "auto",
+    marginLeft: 10,
   },
   cta: {
     marginTop: 30,

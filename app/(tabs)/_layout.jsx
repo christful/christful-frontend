@@ -1,5 +1,5 @@
 import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
-import { FontAwesome5 } from "@expo/vector-icons";
+import { FontAwesome5, MaterialIcons} from "@expo/vector-icons";
 import React from "react";
 import { useRouter, Tabs, useSegments } from "expo-router";
 import { Colors } from "@/constants/Colors";
@@ -101,6 +101,74 @@ export default function TabLayout() {
                 name="users"
                 size={18}
                 color={currentRoute == "communities" && "white"}
+              />
+            </View>
+          ),
+          tabBarActiveTintColor: "#808000",
+        }}
+      />
+      <Tabs.Screen
+        name="space"
+        options={{
+          headerTitle: "Space",
+          headerShadowVisible: false,
+
+          headerRight: () => (
+            <View style={styles.headerLeftContainer}>
+              <FontAwesome5
+                name="book-open"
+                size={18}
+                color={Colors.light.icon}
+              />
+              <FontAwesome5 name="search" size={18} color={Colors.light.icon} />
+              <FontAwesome5 name="ellipsis-v" size={18} color={"black"} />
+            </View>
+          ),
+          tabBarIcon: () => (
+            <View
+              style={[
+                styles.nav,
+                currentRoute == "space" && styles.active,
+              ]}
+            >
+              <FontAwesome5
+                name="microphone"
+                size={18}
+                color={currentRoute == "space" && "white"}
+              />
+            </View>
+          ),
+          tabBarActiveTintColor: "#808000",
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          headerTitle: "Notifications",
+          headerShadowVisible: false,
+
+          headerRight: () => (
+            <View style={styles.headerLeftContainer}>
+              <MaterialIcons
+                name="notifications"
+                size={18}
+                color={Colors.light.icon}
+              />
+              <FontAwesome5 name="search" size={18} color={Colors.light.icon} />
+              <FontAwesome5 name="ellipsis-v" size={18} color={"black"} />
+            </View>
+          ),
+          tabBarIcon: () => (
+            <View
+              style={[
+                styles.nav,
+                currentRoute == "notifications" && styles.active,
+              ]}
+            >
+              <MaterialIcons
+                name="notifications"
+                size={18}
+                color={currentRoute == "notifications" && "white"}
               />
             </View>
           ),
